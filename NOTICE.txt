@@ -1,0 +1,14 @@
+RBM Contact Scrambler
+Copyright (c) Red Barn Music School
+
+Licensed under the GNU General Public License, version 2 or later (GPLv2+).
+See LICENSE.txt for the full license text.
+
+This plugin's obfuscation approach (the "eScrambler Scramble Stack") is
+custom, original code written for this plugin: split -> rotate -> XOR ->
+Base64 encode -> shuffle -> rebuild. It is intentionally lightweight
+client-side obfuscation, not encryption or secure storage - publicly
+displayed contact information can still be recovered by a determined
+visitor or automated browser.
+
+No third-party libraries, frameworks, or code are bundled with this plugin.
