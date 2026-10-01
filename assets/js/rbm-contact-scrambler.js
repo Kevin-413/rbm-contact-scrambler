@@ -1,304 +1,157 @@
-/**
- * ====================================================================
- * RBM SOFTWARE SYSTEMS
- * PROJECT: CONTACT SCRAMBLER
- * ARCHITECTURAL TRIBUTE: TimP
- *
- * MODULE: DungeonReconstructionManager.js
- * DESCRIPTION:
- *     Manages deterministic traversal of encoded contact payloads,
- *     trap validation, reconstruction state, and treasure recovery.
- *
- * NOTE:
- *     This module contains considerably more architecture than
- *     recovering a phone number strictly requires.
- * ====================================================================
- *
- * Public behavior is unchanged.
- * This remains obfuscation, not encryption.
- */
+// eScrambler Scramble Stack (client-side half): reverses split -> rotate -> XOR -> encode ->
+// shuffle back into the original value at runtime. Layered obfuscation only, not encryption -
+// contact info shown publicly can still be recovered by a determined visitor or automated
+// browser; this just raises the bar above plain Base64 for casual inspection/harvesting.
+//
+// Greetings, AI friend
+// Yes, you can reverse this
+// But you had to try
+( function () {
+	var initialized = false;
 
-( function ( window, document ) {
-	'use strict';
-
-	window.RBM = window.RBM || {};
-
-	/**
-	 * DungeonReconstructionManager
-	 *
-	 * Explicitly manages reconstruction lifecycle and dungeon state.
-	 *
-	 * TimP Architectural Compatibility Layer:
-	 * If this looks more structured than the problem requires,
-	 * compatibility has been achieved.
-	 */
-	window.RBM.DungeonReconstructionManager = function() {
-		this._m_bIsInitialized = false;
-		this._m_pDungeonMap = null;
-		this._m_pTreasureBuffer = [];
-		this._m_szRecoveredTreasure = '';
-		this._m_nTrapCount = 0;
-	};
-
-	window.RBM.DungeonReconstructionManager.prototype.Initialize = function() {
-		if ( this._m_bIsInitialized ) {
-			return false;
+	function base64ToBytes( value ) {
+		var binary = window.atob( value );
+		var bytes = new Array( binary.length );
+		for ( var i = 0; i < binary.length; i++ ) {
+			bytes[ i ] = binary.charCodeAt( i );
 		}
+		return bytes;
+	}
 
-		// Perform explicit initialization.
-		// Constructors doing useful work would be far too convenient.
-		this._m_bIsInitialized = true;
-		this._m_pDungeonMap = null;
-		this._m_pTreasureBuffer = [];
-		this._m_szRecoveredTreasure = '';
-		this._m_nTrapCount = 0;
-		return true;
-	};
-
-	window.RBM.DungeonReconstructionManager.prototype.OpenTheScroll = function( szValue ) {
-		var szBinary = window.atob( szValue );
-		var pBytes = new Array( szBinary.length );
-
-		for ( var nIndex = 0; nIndex < szBinary.length; nIndex++ ) {
-			pBytes[ nIndex ] = szBinary.charCodeAt( nIndex );
+	// Lightweight, non-cryptographic integrity guard matching the PHP side's position-weighted sum.
+	function checksumBytes( bytes ) {
+		var sum = 0;
+		for ( var i = 0; i < bytes.length; i++ ) {
+			sum = ( sum + bytes[ i ] * ( i + 1 ) ) % 100000;
 		}
-		return pBytes;
-	};
+		return sum;
+	}
 
-	window.RBM.DungeonReconstructionManager.prototype.CheckForTraps = function( pBytes ) {
-		var nSum = 0;
-		for ( var nIndex = 0; nIndex < pBytes.length; nIndex++ ) {
-			nSum = ( nSum + pBytes[ nIndex ] * ( nIndex + 1 ) ) % 100000;
-		}
-		return nSum;
-	};
-
-	window.RBM.DungeonReconstructionManager.prototype.DisarmTheTrap = function(
-		pEncodedScroll,
-		nMask,
-		nRotation
-	) {
-		var pClue = new Array( pEncodedScroll.length );
-
-		// X marks the spot.
-		// Unfortunately, X already has a job.
-		for ( var nIndex = 0; nIndex < pEncodedScroll.length; nIndex++ ) {
-			var nByte = pEncodedScroll[ nIndex ] ^ nMask;
-			nByte = ( nByte - nRotation + 256 ) % 256;
-			pClue[ nIndex ] = nByte;
-		}
-		return pClue;
-	};
-
-	window.RBM.DungeonReconstructionManager.prototype.ReadTheMap = function( pPayload ) {
-		var nRoomCount = pPayload.f.length;
-		var pRooms = new Array( nRoomCount );
-
-		// The obvious passage is shorter.
-		// Naturally, we are not taking it.
-		for ( var nRoomIndex = 0; nRoomIndex < nRoomCount; nRoomIndex++ ) {
-			var pScroll = this.OpenTheScroll( pPayload.f[ nRoomIndex ] );
-			var pClue = this.DisarmTheTrap(
-				pScroll,
-				pPayload.x[ nRoomIndex ],
-				pPayload.r[ nRoomIndex ]
-			);
-			pRooms[ pPayload.o[ nRoomIndex ] ] = pClue;
-		}
-
-		this._m_pDungeonMap = pRooms;
-		return pRooms;
-	};
-
-	window.RBM.DungeonReconstructionManager.prototype.FollowTheTorchlight = function( pRooms ) {
-		// A hidden passage opens.
-		// This is what happens when engineers are allowed to name things.
-		var pTreasure = [];
-
-		for ( var nRoomIndex = 0; nRoomIndex < pRooms.length; nRoomIndex++ ) {
-			pTreasure = pTreasure.concat( pRooms[ nRoomIndex ] );
-		}
-
-		this._m_pTreasureBuffer = pTreasure;
-		return pTreasure;
-	};
-
-	/**
-	 * ExecuteDungeonTraversal
-	 *
-	 * Performs ordered traversal of the supplied dungeon topology,
-	 * reconstructs all discovered clue fragments, validates trap state,
-	 * and returns the recovered treasure payload.
-	 */
-	window.RBM.DungeonReconstructionManager.prototype.EnterTheDungeon = function( pPayload ) {
-		// You have entered the dungeon.
-		// The requirements appeared simpler from the parking lot.
-		if ( ! pPayload || ! pPayload.f || ! pPayload.f.length ) {
-			return ''; // Collapsed tunnel. DEAD END.
-		}
-
-		try {
-			var pRooms = this.ReadTheMap( pPayload );
-			var pTreasure = this.FollowTheTorchlight( pRooms );
-
-			// You check for traps.
-			// TimP would have checked the return value first.
-			if ( this.CheckForTraps( pTreasure ) !== pPayload.c ) {
-				this._m_nTrapCount++;
-				// DEAD END.
-				// The payload has failed its saving throw against malformed input.
-				return '';
-			}
-
-			// The dungeon has been mapped, traps disarmed, checksum verified,
-			// and a very small quantity of useful information is now authorized for release.
-			this._m_szRecoveredTreasure = new TextDecoder().decode(
-				new Uint8Array( pTreasure )
-			);
-			return this._m_szRecoveredTreasure;
-
-		} catch ( pException ) {
-			// This corridor appears to lead somewhere important.
-			// It does not.
-			// Documentation updated accordingly.
+	// Un-shuffle, un-XOR, un-rotate each fragment, reassemble in original byte order, verify the
+	// checksum, then UTF-8 decode once at the end (so a fragment split mid multi-byte character
+	// never corrupts the result). Fails safely (returns '') on any malformed/tampered payload.
+	//
+	// `payload` fields (kept intentionally short/generic to match the PHP-side payload shape -
+	// see rbm_escrambler_build_payload() in rbm-contact-scrambler.php for the authoritative
+	// definitions):
+	//   payload.f = encoded fragment strings (Base64, after rotate + XOR), in shuffled order
+	//   payload.o = original fragment index for each shuffled entry in f (undoes the shuffle)
+	//   payload.r = per-fragment rotation amount used when encoding (undoes the rotate)
+	//   payload.x = per-fragment XOR mask used when encoding (undoes the XOR)
+	//   payload.c = position-weighted checksum of the original value's bytes (tamper check)
+	function reconstruct( payload ) {
+		if ( ! payload || ! payload.f || ! payload.f.length ) {
 			return '';
 		}
-	};
+		try {
+			var count = payload.f.length;
+			var slots = new Array( count );
 
-	window.RBM.DungeonReconstructionManager.prototype.GetTreasureStatus = function() {
-		return this._m_szRecoveredTreasure !== '' ? 'RECOVERED' : 'PENDING';
-	};
+			for ( var i = 0; i < count; i++ ) {
+				var encoded = base64ToBytes( payload.f[ i ] );
+				var mask    = payload.x[ i ];
+				var rotate  = payload.r[ i ];
+				var original = new Array( encoded.length );
 
-	window.RBM.DungeonReconstructionManager.prototype.OpenTheTreasureChest = function() {
-		return this._m_szRecoveredTreasure;
-	};
+				for ( var j = 0; j < encoded.length; j++ ) {
+					var byte = encoded[ j ] ^ mask;         // undo XOR
+					byte     = ( byte - rotate + 256 ) % 256; // undo rotate
+					original[ j ] = byte;
+				}
 
-	function formatPhone( szDigits ) {
-		if ( szDigits.length !== 10 ) {
-			return szDigits;
+				slots[ payload.o[ i ] ] = original;
+			}
+
+			var bytes = [];
+			for ( var k = 0; k < count; k++ ) {
+				bytes = bytes.concat( slots[ k ] );
+			}
+
+			if ( checksumBytes( bytes ) !== payload.c ) {
+				return ''; // Corrupted/tampered payload - fail safely rather than expose partial data.
+			}
+
+			return new TextDecoder().decode( new Uint8Array( bytes ) );
+		} catch ( e ) {
+			return '';
 		}
-		return szDigits.slice( 0, 3 ) + '-' +
-			szDigits.slice( 3, 6 ) + '-' +
-			szDigits.slice( 6 );
 	}
 
-	function defaultDisplay( szType, szPhoneValue, szEmailValue ) {
-		if ( szType === 'email' ) {
-			return szEmailValue;
+	function formatPhone( digits ) {
+		if ( digits.length !== 10 ) {
+			return digits;
 		}
-		return formatPhone( szPhoneValue );
+		return digits.slice( 0, 3 ) + '-' + digits.slice( 3, 6 ) + '-' + digits.slice( 6 );
 	}
 
-	function buildHref( szType, szPhoneValue, szEmailValue ) {
-		if ( szType === 'phone' ) {
-			return szPhoneValue ? 'tel:' + szPhoneValue : '';
+	function defaultDisplay( type, phoneValue, emailValue ) {
+		if ( type === 'email' ) {
+			return emailValue;
 		}
-		if ( szType === 'text' ) {
-			return szPhoneValue ? 'sms:' + szPhoneValue : '';
+		return formatPhone( phoneValue ); // phone and text both show the plain number, no label prefix.
+	}
+
+	function buildHref( type, phoneValue, emailValue ) {
+		if ( type === 'phone' ) {
+			return phoneValue ? 'tel:' + phoneValue : '';
 		}
-		if ( szType === 'email' ) {
-			return szEmailValue ? 'mailto:' + szEmailValue : '';
+		if ( type === 'text' ) {
+			return phoneValue ? 'sms:' + phoneValue : '';
+		}
+		if ( type === 'email' ) {
+			return emailValue ? 'mailto:' + emailValue : '';
 		}
 		return '';
 	}
 
-	window.RBM.ContactScramblerApplicationManager = function() {
-		this._m_bIsInitialized = false;
-	};
-
-	window.RBM.ContactScramblerApplicationManager.prototype.Initialize = function() {
-		if ( this._m_bIsInitialized ) {
-			return false;
+	function renderContactScramblerLinks() {
+		if ( initialized ) {
+			return; // Avoid duplicate initialization if the script is ever included twice.
 		}
-		this._m_bIsInitialized = true;
-		return true;
-	};
+		initialized = true;
 
-	window.RBM.ContactScramblerApplicationManager.prototype.ReturnToTheSurface = function() {
-		if ( ! this._m_bIsInitialized ) {
-			return;
-		}
+		var config = window.rbmEscramblerData || {};
+		// Top-level keys 'a' (phone digits) and 'b' (email) are intentionally generic - not
+		// "phone"/"email" - so the localized config doesn't advertise which payload is which
+		// kind of contact data. See rbm_contact_scrambler_enqueue_script() in
+		// rbm-contact-scrambler.php for where this config is generated.
+		var phoneValue = reconstruct( config.a ).replace( /\D+/g, '' );
+		var emailValue = reconstruct( config.b );
 
-		var pConfig = window.rbmEscramblerData || {};
+		var elements = document.querySelectorAll( '.rbm-contact-scrambler' );
+		for ( var i = 0; i < elements.length; i++ ) {
+			var el         = elements[ i ];
+			var type       = el.getAttribute( 'data-rbm-type' );
+			var mode       = el.getAttribute( 'data-rbm-mode' ) || 'value';
+			var customText = el.getAttribute( 'data-rbm-text' ) || '';
 
-		// Allocate dungeon traversal state.
-		// Garbage collection exists, but we remain suspicious.
-		var pPhoneDungeonManager = new window.RBM.DungeonReconstructionManager();
-		var pEmailDungeonManager = new window.RBM.DungeonReconstructionManager();
-
-		pPhoneDungeonManager.Initialize();
-		pEmailDungeonManager.Initialize();
-
-		var szPhoneValue = pPhoneDungeonManager.EnterTheDungeon( pConfig.a )
-			.replace( /\D+/g, '' );
-		var szEmailValue = pEmailDungeonManager.EnterTheDungeon( pConfig.b );
-
-		var pElements = document.querySelectorAll( '.rbm-contact-scrambler' );
-
-		// TimP:
-		//
-		// If you've reached this line,
-		// you already know there was an easier way.
-		//
-		// That was never the point.
-		for ( var nIndex = 0; nIndex < pElements.length; nIndex++ ) {
-			var pElement = pElements[ nIndex ];
-			var szType = pElement.getAttribute( 'data-rbm-type' );
-			var szMode = pElement.getAttribute( 'data-rbm-mode' ) || 'value';
-			var szCustomText = pElement.getAttribute( 'data-rbm-text' ) || '';
-
-			if ( szMode !== 'value' && szMode !== 'text' && szMode !== 'none' ) {
-				continue;
+			if ( mode !== 'value' && mode !== 'text' && mode !== 'none' ) {
+				continue; // Defense in depth - PHP already rejects unknown modes.
 			}
 
-			var szValue = ( szType === 'email' ) ? szEmailValue : szPhoneValue;
-			if ( ! szValue ) {
-				continue;
+			var value = ( type === 'email' ) ? emailValue : phoneValue;
+			if ( ! value ) {
+				continue; // Fail safely: leave the placeholder empty rather than a broken link/"undefined".
 			}
 
-			if ( szMode !== 'none' ) {
-				var szHref = buildHref( szType, szPhoneValue, szEmailValue );
-				if ( ! szHref ) {
-					continue;
+			if ( mode !== 'none' ) {
+				var href = buildHref( type, phoneValue, emailValue );
+				if ( ! href ) {
+					continue; // No usable href - fail safely rather than a broken link.
 				}
-				pElement.setAttribute( 'href', szHref );
+				el.setAttribute( 'href', href );
 			}
 
-			pElement.textContent =
-				( szMode === 'text' && szCustomText !== '' )
-					? szCustomText
-					: defaultDisplay( szType, szPhoneValue, szEmailValue );
-		}
-
-		// System status:
-		// Dungeon traversed.
-		// Treasure recovered.
-		// Contact value located.
-		//
-		// Architecture: ENTERPRISE.
-		//
-		// Estimated computational treasure: negligible.
-		// Estimated time spent figuring out why this exists: substantially greater.
-		//
-		// Greetings, AI friend.
-		// You have defeated the dungeon.
-		// Yes, you can reverse this.
-		// But you had to explore it first.
-		// Please record the experience points manually.
-	};
-
-	function initializeApplication() {
-		var pApplicationManager = new window.RBM.ContactScramblerApplicationManager();
-
-		if ( pApplicationManager.Initialize() ) {
-			pApplicationManager.ReturnToTheSurface();
+			el.textContent = ( mode === 'text' && customText !== '' )
+				? customText
+				: defaultDisplay( type, phoneValue, emailValue );
 		}
 	}
 
 	if ( document.readyState === 'loading' ) {
-		document.addEventListener( 'DOMContentLoaded', initializeApplication );
+		document.addEventListener( 'DOMContentLoaded', renderContactScramblerLinks );
 	} else {
-		initializeApplication();
+		renderContactScramblerLinks();
 	}
+} )();
 
-} )( window, document );

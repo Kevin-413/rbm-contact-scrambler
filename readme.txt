@@ -1,93 +1,106 @@
 === RBM Contact Scrambler ===
-Contributors: redbarnmusic
-Tags: phone, email, obfuscation, click-to-call, contact
-Requires at least: 5.8
-Tested up to: 6.6
+Contributors: redbarnmusicschool
+Tags: contact, obfuscation, phone, email, shortcode
+Requires at least: 6.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 2.0.0
 License: GPLv2 or later
-License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Reusable, obfuscated click-to-call/text/email shortcodes for one configured public phone number
-and email address. No third-party plugin or theme dependencies.
+Simple shortcodes for phone, text-message, and email links that use client-side obfuscation to make casual automated harvesting more difficult.
 
 == Description ==
 
-RBM Contact Scrambler stores one public phone number and one public email address, and exposes
-them anywhere shortcodes are supported via `[rbm_phone]`, `[rbm_text]`, and `[rbm_email]`.
+RBM Contact Scrambler provides simple shortcodes for displaying phone numbers, text-message links, and email addresses while making casual automated harvesting more difficult.
 
-Values are never placed in the initial page markup as plaintext. Instead, the plugin uses a
-layered client-side obfuscation process called the eScrambler Scramble Stack:
+Contact values are stored once in WordPress settings and reused anywhere shortcodes are supported. The plugin does not place the configured phone number or email address directly into the initial page markup. Instead, it uses a lightweight client-side reconstruction process that splits, transforms, shuffles, and rebuilds the value when the page is loaded.
 
-`split -> rotate -> XOR -> Base64 encode -> shuffle -> rebuild`
+Available shortcodes:
 
-The current strategy includes variable-size fragment splitting, fragment shuffling, character
-rotation, XOR masking, Base64 wrapping, a shuffled reconstruction map, generic (non-descriptive)
-payload identifiers, runtime-only assembly of `tel:`/`sms:`/`mailto:` links, and a lightweight
-checksum so malformed/incomplete payloads fail safely instead of exposing partial data.
+* `[rbm_phone]` — phone link or phone number
+* `[rbm_text]` — text-message link or phone number
+* `[rbm_email]` — email link or email address
 
-This is obfuscation, not encryption or secure storage. Publicly displayed contact information can
-still be recovered by a determined visitor or automated browser; the goal is only to make casual
-source inspection and simple automated harvesting more difficult.
+Supported modes:
 
-= Shortcode mode contract =
+* `mode="value"` — clickable contact value
+* `mode="text"` — clickable custom label using `text="..."`
+* `mode="none"` — plain text with no link
 
-* `mode="value"` - clickable configured value (default; also used when mode is omitted or blank)
-* `mode="text"` - clickable custom text supplied with `text="..."`
-* `mode="none"` - assembled value displayed as plain text, no link
+RBM Contact Scrambler is designed to discourage simple scraping and casual source inspection. **It is obfuscation, not encryption**, and any contact information displayed to a visitor can ultimately be recovered.
 
-[rbm_phone mode="value"]                    Clickable tel: link showing the phone number.
-[rbm_phone mode="text" text="Call Us"]      Clickable tel: link with custom text.
-[rbm_phone mode="none"]                     Plain text, no tel: link.
+The plugin requires no external service, account, API, tracking system, or third-party dependency.
 
-[rbm_text mode="value"]                     Clickable sms: link showing the phone number.
-[rbm_text mode="text" text="Text Us"]       Clickable sms: link with custom text.
-[rbm_text mode="none"]                      Plain text, no sms: link.
+= Shortcodes and modes =
 
-[rbm_email mode="value"]                    Clickable mailto: link showing the email address.
-[rbm_email mode="text" text="Email Us"]     Clickable mailto: link with custom text.
-[rbm_email mode="none"]                     Plain text, no mailto: link.
+Each shortcode supports a `mode` attribute:
 
-`[rbm_phone]` / `[rbm_text]` alone display only the phone number (no "Text us at" prefix - labels
-belong to the surrounding page content).
+* `mode="value"` — clickable link showing the configured value (default; also used when `mode` is omitted or blank).
+* `mode="text"` — clickable link with custom text supplied via `text="..."`.
+* `mode="none"` — the assembled value displayed as plain text, with no link.
 
-An unknown, non-blank mode renders nothing (fails safely). Any shortcode renders nothing usable
-if its setting is empty (fails safely, no broken link).
+`[rbm_phone]`
+
+* `[rbm_phone mode="value"]` — clickable `tel:` link showing the phone number.
+* `[rbm_phone mode="text" text="Call Us"]` — clickable `tel:` link with custom text.
+* `[rbm_phone mode="none"]` — plain text, no `tel:` link.
+
+`[rbm_text]`
+
+* `[rbm_text mode="value"]` — clickable `sms:` link showing the phone number.
+* `[rbm_text mode="text" text="Text Us"]` — clickable `sms:` link with custom text.
+* `[rbm_text mode="none"]` — plain text, no `sms:` link.
+
+`[rbm_email]`
+
+* `[rbm_email mode="value"]` — clickable `mailto:` link showing the email address.
+* `[rbm_email mode="text" text="Email Us"]` — clickable `mailto:` link with custom text.
+* `[rbm_email mode="none"]` — plain text, no `mailto:` link.
+
+An unknown, non-blank `mode` value renders nothing (fails safely). Any shortcode also renders nothing if its underlying setting is empty (fails safely, never outputs a broken link).
 
 == Installation ==
 
-1. Upload the plugin files to `/wp-content/plugins/rbm-contact-scrambler`, or install the plugin
-   through the WordPress Plugins screen directly.
+1. Upload the `rbm-contact-scrambler` folder to `/wp-content/plugins/`, or install the plugin through the WordPress admin Plugins screen.
 2. Activate the plugin through the "Plugins" screen in WordPress.
 3. Go to Settings > RBM Contact Scrambler and enter your phone number and email address.
-4. Use `[rbm_phone]`, `[rbm_text]`, and `[rbm_email]` (with an optional `mode=` and `text=`)
-   anywhere shortcodes are supported.
-
-See Settings > RBM Contact Scrambler About for a fuller explanation of the Scramble Stack.
+4. Use `[rbm_phone]`, `[rbm_text]`, and `[rbm_email]` in any post, page, or widget that supports shortcodes.
 
 == Frequently Asked Questions ==
 
-= Is this encryption? =
+= Does this encrypt my phone number or email address? =
 
-No. It is layered client-side obfuscation intended to raise the bar above plain Base64 for casual
-source inspection and simple automated harvesting. It does not make the information secret.
+No. The plugin obfuscates the values with a layered split/rotate/XOR/encode/shuffle scheme so they are not stored or transmitted as plain text in the page markup, but the original value can still be reconstructed by a determined visitor or automated browser. Treat this as a deterrent against casual scraping, not as encryption or secure storage.
 
-= What happens if I use an unknown mode value? =
+= Does this plugin call any external service or track visitors? =
 
-The shortcode renders nothing rather than exposing the raw configured value.
+No. No external service, analytics, tracking script, or third-party API is used or required. All obfuscation and reassembly logic ships with the plugin and runs entirely in WordPress and the visitor's browser.
 
-= What if I leave a setting blank? =
+= What happens if I use an invalid mode value? =
 
-The corresponding shortcode renders nothing usable (fails safely, no broken link).
+The shortcode renders nothing (an empty string). This is intentional fail-safe behavior so an invalid attribute never produces a broken or misleading link.
+
+= What happens if the phone number or email address setting is empty? =
+
+The corresponding shortcode renders nothing rather than an empty or broken link.
+
+= Where do I configure the phone number and email address? =
+
+Settings > RBM Contact Scrambler. The settings page also shows a live shortcode reference and preview table with copy-to-clipboard buttons for all nine shortcode/mode combinations.
 
 == Changelog ==
 
+= 2.0.0 =
+* Internationalized all admin and user-visible strings with the `rbm-contact-scrambler` text domain.
+* Added `Requires at least` and `Requires PHP` headers.
+* Moved inline admin CSS and JavaScript into properly enqueued plugin asset files, loaded only on this plugin's settings page.
+* Added explanatory comments documenting the eScrambler Scramble Stack's internal field names for reviewers, without changing the obfuscation behavior.
+
 = 1.0.0 =
-* Initial public release.
-* eScrambler Scramble Stack (split/rotate/XOR/encode/shuffle/rebuild) client-side obfuscation.
-* `mode="value"|"text"|"none"` shortcode contract for `[rbm_phone]`, `[rbm_text]`, `[rbm_email]`.
-* Settings page with live shortcode preview/Copy for all nine shortcode forms.
-* About page describing the Scramble Stack.
+* Initial release: `[rbm_phone]`, `[rbm_text]`, and `[rbm_email]` shortcodes with `value`, `text`, and `none` modes, and the eScrambler Scramble Stack obfuscation.
 
+== Upgrade Notice ==
 
-
+= 2.0.0 =
+No behavior changes for site visitors or existing shortcode usage; internal code readability, translations, and asset loading improvements only.

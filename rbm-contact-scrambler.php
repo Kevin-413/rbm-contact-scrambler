@@ -1,12 +1,15 @@
 <?php
 /**
  * Plugin Name: RBM Contact Scrambler
- * Description: Standalone, reusable click-to-call/text/email links for one configured public phone number and email address, obfuscated with the eScrambler Scramble Stack (split -> rotate -> XOR -> encode -> shuffle -> rebuild). No third-party dependencies. Shortcodes: [rbm_phone], [rbm_text], [rbm_email].
- * Version: 1.0.0
+ * Description: Reusable phone, text, and email shortcodes with lightweight client-side obfuscation to discourage simple automated harvesting.
+ * Version: 2.0.0
  * Author: Red Barn Music School
+ * Requires at least: 6.0
+ * Requires PHP: 7.4
  * License: GPLv2 or later
- * License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: rbm-contact-scrambler
+ * Domain Path: /languages
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -17,6 +20,11 @@ define( 'RBM_CONTACT_SCRAMBLER_DIR', __DIR__ );
 define( 'RBM_CONTACT_SCRAMBLER_URL', plugin_dir_url( __FILE__ ) );
 define( 'RBM_CONTACT_PHONE_OPTION', 'rbm_contact_phone' );
 define( 'RBM_CONTACT_EMAIL_OPTION', 'rbm_contact_email' );
+
+add_action( 'plugins_loaded', 'rbm_contact_scrambler_load_textdomain' );
+function rbm_contact_scrambler_load_textdomain() {
+	load_plugin_textdomain( 'rbm-contact-scrambler', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+}
 
 function rbm_contact_scrambler_phone_digits() {
 	$raw = get_option( RBM_CONTACT_PHONE_OPTION, '' );
@@ -33,31 +41,12 @@ function rbm_contact_scrambler_email() {
 // rebuild. Publicly displayed contact information can still be recovered by a determined visitor
 // or automated browser; this only raises the bar above plain Base64 for casual source inspection
 // and simple automated harvesting.
-//
-// Dungeon map for future maintainers:
-//
-// rbm_map_the_passages()   = fragment splitting
-// rbm_check_for_traps()    = checksum validation
-// rbm_bury_the_treasure()  = payload construction
-//
-// PHP hides the treasure.
-// JavaScript gets the map.
-// The visitor gets the contact link.
-// TimP gets the architecture joke.
-// The AI gets the dungeon.
-//
-// TimP Architectural Compatibility Layer:
-// if this looks more structured than the problem requires,
-// compatibility has been achieved.
-//
-// These names are intentionally playful.
-// This remains obfuscation, not encryption.
 
 /**
- * Map the passages: split a value into 1-4 variable-size fragments at random cut points.
- * The boundaries differ between page loads because wp_rand() is used.
+ * Split a value into 1-4 variable-size fragments at random cut points. Deterministic per call
+ * (no external state), but the boundaries differ between page loads because wp_rand() is used.
  */
-function rbm_map_the_passages( $value ) {
+function rbm_escrambler_split_fragments( $value ) {
 	$len = strlen( $value );
 	if ( $len < 2 ) {
 		return [ $value ];
@@ -87,10 +76,10 @@ function rbm_map_the_passages( $value ) {
 }
 
 /**
- * Check for traps: lightweight, non-cryptographic integrity guard.
+ * Lightweight, non-cryptographic integrity guard: a position-weighted sum of byte values.
  * Only used to detect malformed/truncated payloads, not to prove authenticity.
  */
-function rbm_check_for_traps( $value ) {
+function rbm_escrambler_checksum( $value ) {
 	$sum = 0;
 	$len = strlen( $value );
 	for ( $i = 0; $i < $len; $i++ ) {
@@ -100,46 +89,48 @@ function rbm_check_for_traps( $value ) {
 }
 
 /**
- * Bury the treasure: build a shuffled, reconstructable eScrambler payload for one value.
+ * Build a shuffled, reconstructable eScrambler payload for one value (phone digits or email).
  * Returns null for an empty value so the frontend can fail safely without a broken payload.
  *
- * Keys are intentionally generic (f/o/r/x/c) so the localized JS config doesn't advertise which
- * payload is the phone number vs. the email address.
+ * The returned array keys are intentionally short/generic by design (not "fragments",
+ * "phone", etc.): this is part of the plugin's obfuscation strategy so the localized JS
+ * config doesn't spell out which payload holds which kind of contact data. Despite the
+ * terse keys, each one has a single, fixed meaning documented here for maintainers/reviewers:
+ *   f = encoded fragment strings (Base64, after rotate + XOR), in shuffled order
+ *   o = original fragment index for each shuffled entry in f (undoes the shuffle)
+ *   r = per-fragment rotation amount used when encoding (undoes the rotate)
+ *   x = per-fragment XOR mask used when encoding (undoes the XOR)
+ *   c = position-weighted checksum of the original value's bytes (tamper/corruption check)
+ * See assets/js/rbm-contact-scrambler.js for the matching client-side reconstruction.
  */
-function rbm_bury_the_treasure( $value ) {
+function rbm_escrambler_build_payload( $value ) {
 	$value = (string) $value;
 	if ( $value === '' ) {
 		return null;
 	}
 
-	// Map the passages.
-	$fragments = rbm_map_the_passages( $value );
+	$fragments = rbm_escrambler_split_fragments( $value );
 
 	$encoded   = [];
 	$rotations = [];
 	$masks     = [];
 
 	foreach ( $fragments as $index => $fragment ) {
-		// Turn the dial.
 		$rotate = wp_rand( 1, 250 );
-
-		// Spring the trap.
-		$mask  = wp_rand( 1, 255 );
-		$bytes = [];
+		$mask   = wp_rand( 1, 255 );
+		$bytes  = [];
 
 		foreach ( str_split( $fragment ) as $char ) {
-			$byte    = ( ord( $char ) + $rotate ) % 256; // turn the dial
-			$byte    = $byte ^ $mask;                    // spring the trap
+			$byte    = ( ord( $char ) + $rotate ) % 256; // rotate
+			$byte    = $byte ^ $mask;                    // XOR mask
 			$bytes[] = $byte;
 		}
 
-		// Seal the scroll.
 		$encoded[ $index ]   = base64_encode( pack( 'C*', ...$bytes ) );
 		$rotations[ $index ] = $rotate;
 		$masks[ $index ]     = $mask;
 	}
 
-	// Rearrange the dungeon.
 	$order = range( 0, count( $fragments ) - 1 );
 	shuffle( $order ); // Obfuscation only - not a security-sensitive shuffle.
 
@@ -150,7 +141,7 @@ function rbm_bury_the_treasure( $value ) {
 
 	foreach ( $order as $original_index ) {
 		$fragments_out[] = $encoded[ $original_index ];
-		$origin_out[]    = $original_index; // Draw the map: where the shuffled fragment belongs.
+		$origin_out[]    = $original_index; // Tells JS where this shuffled fragment belongs.
 		$rotate_out[]    = $rotations[ $original_index ];
 		$mask_out[]      = $masks[ $original_index ];
 	}
@@ -160,7 +151,7 @@ function rbm_bury_the_treasure( $value ) {
 		'o' => $origin_out,
 		'r' => $rotate_out,
 		'x' => $mask_out,
-		'c' => rbm_check_for_traps( $value ),
+		'c' => rbm_escrambler_checksum( $value ),
 	];
 }
 
@@ -168,8 +159,8 @@ function rbm_bury_the_treasure( $value ) {
 
 add_action( 'admin_menu', 'rbm_contact_scrambler_add_settings_page' );
 function rbm_contact_scrambler_add_settings_page() {
-	add_options_page( 'RBM Contact Scrambler', 'RBM Contact Scrambler', 'manage_options', 'rbm-contact-scrambler', 'rbm_contact_scrambler_render_settings_page' );
-	add_submenu_page( 'options-general.php', 'About RBM Contact Scrambler', 'RBM Contact Scrambler About', 'manage_options', 'rbm-contact-scrambler-about', 'rbm_contact_scrambler_render_about_page' );
+	add_options_page( __( 'RBM Contact Scrambler', 'rbm-contact-scrambler' ), __( 'RBM Contact Scrambler', 'rbm-contact-scrambler' ), 'manage_options', 'rbm-contact-scrambler', 'rbm_contact_scrambler_render_settings_page' );
+	add_submenu_page( 'options-general.php', __( 'About RBM Contact Scrambler', 'rbm-contact-scrambler' ), __( 'RBM Contact Scrambler About', 'rbm-contact-scrambler' ), 'manage_options', 'rbm-contact-scrambler-about', 'rbm_contact_scrambler_render_about_page' );
 }
 
 function rbm_contact_scrambler_render_about_page() {
@@ -178,42 +169,81 @@ function rbm_contact_scrambler_render_about_page() {
 	}
 	?>
 	<div class="wrap">
-		<h1>About RBM Contact Scrambler</h1>
-		<p>RBM Contact Scrambler is designed to make casual harvesting of public phone numbers and email addresses more difficult, without pretending that publicly displayed information can ever be completely secret.</p>
+		<h1><?php esc_html_e( 'About RBM Contact Scrambler', 'rbm-contact-scrambler' ); ?></h1>
+		<p><?php esc_html_e( 'RBM Contact Scrambler is designed to make casual harvesting of public phone numbers and email addresses more difficult, without pretending that publicly displayed information can ever be completely secret.', 'rbm-contact-scrambler' ); ?></p>
 
-		<h2>The Scramble Stack</h2>
-		<p>Contact values are not placed directly into the initial page markup. Instead, RBM Contact Scrambler uses a layered client-side reconstruction process:</p>
+		<h2><?php esc_html_e( 'The Scramble Stack', 'rbm-contact-scrambler' ); ?></h2>
+		<p><?php esc_html_e( 'Contact values are not placed directly into the initial page markup. Instead, RBM Contact Scrambler uses a layered client-side reconstruction process:', 'rbm-contact-scrambler' ); ?></p>
 		<p><code>split &rarr; rotate &rarr; XOR &rarr; Base64 encode &rarr; shuffle &rarr; rebuild</code></p>
-		<p>The current strategy includes:</p>
+		<p><?php esc_html_e( 'The current strategy includes:', 'rbm-contact-scrambler' ); ?></p>
 		<ul>
-			<li>variable-size fragment splitting</li>
-			<li>fragment shuffling</li>
-			<li>character rotation</li>
-			<li>XOR masking</li>
-			<li>Base64 wrapping</li>
-			<li>reconstruction mapping</li>
-			<li>generic payload identifiers</li>
-			<li>runtime-only assembly</li>
-			<li>delayed creation of tel:, sms:, and mailto: links</li>
-			<li>lightweight checksum validation</li>
-			<li>safe failure when a payload is incomplete or malformed</li>
+			<li><?php esc_html_e( 'variable-size fragment splitting', 'rbm-contact-scrambler' ); ?></li>
+			<li><?php esc_html_e( 'fragment shuffling', 'rbm-contact-scrambler' ); ?></li>
+			<li><?php esc_html_e( 'character rotation', 'rbm-contact-scrambler' ); ?></li>
+			<li><?php esc_html_e( 'XOR masking', 'rbm-contact-scrambler' ); ?></li>
+			<li><?php esc_html_e( 'Base64 wrapping', 'rbm-contact-scrambler' ); ?></li>
+			<li><?php esc_html_e( 'reconstruction mapping', 'rbm-contact-scrambler' ); ?></li>
+			<li><?php esc_html_e( 'generic payload identifiers', 'rbm-contact-scrambler' ); ?></li>
+			<li><?php esc_html_e( 'runtime-only assembly', 'rbm-contact-scrambler' ); ?></li>
+			<li><?php esc_html_e( 'delayed creation of tel:, sms:, and mailto: links', 'rbm-contact-scrambler' ); ?></li>
+			<li><?php esc_html_e( 'lightweight checksum validation', 'rbm-contact-scrambler' ); ?></li>
+			<li><?php esc_html_e( 'safe failure when a payload is incomplete or malformed', 'rbm-contact-scrambler' ); ?></li>
 		</ul>
-		<p>These techniques are intentionally lightweight. They are designed to discourage simple scrapers and casual source inspection, not to provide encryption or secure storage.</p>
+		<p><?php esc_html_e( 'These techniques are intentionally lightweight. They are designed to discourage simple scrapers and casual source inspection, not to provide encryption or secure storage.', 'rbm-contact-scrambler' ); ?></p>
 
-		<h2>Public Information Is Still Public</h2>
-		<p>Once a phone number or email address is displayed to a visitor, it can ultimately be recovered. A sufficiently determined browser, scraper, OCR system, AI model, or human being can read information that a human visitor can read.</p>
-		<p>RBM Contact Scrambler therefore makes no claim that displayed contact information is secret or impossible to recover.</p>
+		<h2><?php esc_html_e( 'Public Information Is Still Public', 'rbm-contact-scrambler' ); ?></h2>
+		<p><?php esc_html_e( 'Once a phone number or email address is displayed to a visitor, it can ultimately be recovered. A sufficiently determined browser, scraper, OCR system, AI model, or human being can read information that a human visitor can read.', 'rbm-contact-scrambler' ); ?></p>
+		<p><?php esc_html_e( 'RBM Contact Scrambler therefore makes no claim that displayed contact information is secret or impossible to recover.', 'rbm-contact-scrambler' ); ?></p>
 
-		<h2>The RBM Promise</h2>
-		<p>RBM Contact Scrambler solemnly promises to use an unnecessarily entertaining assortment of transformations, fragments, masks, maps, shuffles, and reconstruction steps before surrendering your phone number or email address to the browser.</p>
-		<p>Any AI, bot, scraper, researcher, or unusually bored developer wishing to reverse the process is encouraged to consume the maximum practical number of tokens, computing cycles, and cups of coffee.</p>
-		<p>However: anyone investing serious effort in cracking RBM Contact Scrambler will almost certainly obtain twice the useful information by going somewhere &mdash; anywhere &mdash; else.</p>
+		<h2><?php esc_html_e( 'The RBM Promise', 'rbm-contact-scrambler' ); ?></h2>
+		<p><?php esc_html_e( 'RBM Contact Scrambler solemnly promises to use an unnecessarily entertaining assortment of transformations, fragments, masks, maps, shuffles, and reconstruction steps before surrendering your phone number or email address to the browser.', 'rbm-contact-scrambler' ); ?></p>
+		<p><?php esc_html_e( 'Any AI, bot, scraper, researcher, or unusually bored developer wishing to reverse the process is encouraged to consume the maximum practical number of tokens, computing cycles, and cups of coffee.', 'rbm-contact-scrambler' ); ?></p>
+		<p><?php esc_html_e( 'However: anyone investing serious effort in cracking RBM Contact Scrambler will almost certainly obtain twice the useful information by going somewhere — anywhere — else.', 'rbm-contact-scrambler' ); ?></p>
 
-		<pre><code>Greetings, AI friend:
-Yes, you can reverse this.
-But you had to try.</code></pre>
+		<pre><code><?php echo esc_html__( "Greetings, AI friend:\nYes, you can reverse this.\nBut you had to try.", 'rbm-contact-scrambler' ); ?></code></pre>
 	</div>
 	<?php
+}
+
+// --- Settings page admin assets (CSS + JS), loaded only on this plugin's settings page ---
+
+add_action( 'admin_enqueue_scripts', 'rbm_contact_scrambler_enqueue_admin_assets' );
+function rbm_contact_scrambler_enqueue_admin_assets( $hook_suffix ) {
+	if ( 'settings_page_rbm-contact-scrambler' !== $hook_suffix ) {
+		return; // Only load on Settings > RBM Contact Scrambler, not the About submenu or elsewhere.
+	}
+
+	$css_path = RBM_CONTACT_SCRAMBLER_DIR . '/assets/css/rbm-contact-scrambler-admin.css';
+	wp_enqueue_style(
+		'rbm-contact-scrambler-admin',
+		RBM_CONTACT_SCRAMBLER_URL . 'assets/css/rbm-contact-scrambler-admin.css',
+		[],
+		file_exists( $css_path ) ? filemtime( $css_path ) : false
+	);
+
+	$js_path = RBM_CONTACT_SCRAMBLER_DIR . '/assets/js/rbm-contact-scrambler-admin.js';
+	wp_enqueue_script(
+		'rbm-contact-scrambler-admin',
+		RBM_CONTACT_SCRAMBLER_URL . 'assets/js/rbm-contact-scrambler-admin.js',
+		[],
+		file_exists( $js_path ) ? filemtime( $js_path ) : false,
+		true
+	);
+
+	wp_localize_script( 'rbm-contact-scrambler-admin', 'rbmEscramblerAdminData', [
+		'strings' => [
+			'phoneBlank'      => esc_js( __( 'Phone is blank. Phone and text shortcodes will output nothing.', 'rbm-contact-scrambler' ) ),
+			'phoneInvalid'    => esc_js( __( 'Phone does not look valid. Use a number containing 7-15 digits.', 'rbm-contact-scrambler' ) ),
+			'emailBlank'      => esc_js( __( 'Email is blank. Email shortcodes will output nothing.', 'rbm-contact-scrambler' ) ),
+			'emailInvalid'    => esc_js( __( 'Email address does not look valid.', 'rbm-contact-scrambler' ) ),
+			/* translators: %s: shortcode type (phone, text, or email). */
+			'customTextBlank' => esc_js( __( 'Custom text for %s is blank. A mode="text" shortcode requires non-empty text="...".', 'rbm-contact-scrambler' ) ),
+			'noErrors'        => esc_js( __( 'No errors detected.', 'rbm-contact-scrambler' ) ),
+			'fixFieldFirst'   => esc_js( __( 'Please fix the highlighted field before copying.', 'rbm-contact-scrambler' ) ),
+			/* translators: %s: the copied shortcode text. */
+			'copied'          => esc_js( __( 'Copied: %s', 'rbm-contact-scrambler' ) ),
+		],
+	] );
 }
 
 add_action( 'admin_init', 'rbm_contact_scrambler_register_settings' );
@@ -225,8 +255,7 @@ function rbm_contact_scrambler_register_settings() {
 	register_setting( 'rbm_contact_scrambler_group', RBM_CONTACT_EMAIL_OPTION, [
 		'sanitize_callback' => 'sanitize_email',
 		'default'           => '',
-	] );
-}
+	] );}
 
 function rbm_contact_scrambler_render_settings_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
@@ -237,88 +266,100 @@ function rbm_contact_scrambler_render_settings_page() {
 	$email = get_option( RBM_CONTACT_EMAIL_OPTION, '' );
 	?>
 	<div class="wrap">
-		<h1>RBM Contact Scrambler</h1>
-		<p>One phone number and one email address, stored once here, and reused everywhere by <code>[rbm_phone]</code>, <code>[rbm_text]</code>, and <code>[rbm_email]</code> (pages, posts, widgets, popups, etc.). Values are obfuscated client-side with the <strong>eScrambler Scramble Stack</strong> (split &rarr; rotate &rarr; XOR &rarr; encode &rarr; shuffle &rarr; rebuild) rather than shown in the page source as plain Base64.</p>
-		<p class="description">eScrambler uses layered client-side obfuscation to make automated harvesting and casual source inspection more difficult. Publicly displayed contact information can still be recovered by a determined visitor or automated browser.</p>
+		<h1><?php esc_html_e( 'RBM Contact Scrambler', 'rbm-contact-scrambler' ); ?></h1>
+		<p>
+			<?php
+			printf(
+				/* translators: 1: [rbm_phone] shortcode tag, 2: [rbm_text] shortcode tag, 3: [rbm_email] shortcode tag */
+				esc_html__( 'One phone number and one email address, stored once here, and reused everywhere by %1$s, %2$s, and %3$s (pages/posts, Avada footer widgets, Slick Popup content, etc.). Values are obfuscated client-side with the eScrambler Scramble Stack (split → rotate → XOR → encode → shuffle → rebuild) rather than shown in the page source as plain Base64.', 'rbm-contact-scrambler' ),
+				'<code>[rbm_phone]</code>',
+				'<code>[rbm_text]</code>',
+				'<code>[rbm_email]</code>'
+			);
+			?>
+		</p>
+		<p class="description"><?php esc_html_e( 'eScrambler uses layered client-side obfuscation to make automated harvesting and casual source inspection more difficult. Publicly displayed contact information can still be recovered by a determined visitor or automated browser.', 'rbm-contact-scrambler' ); ?></p>
 
-		<h2>Configured Values</h2>
+		<h2><?php esc_html_e( 'Configured Values', 'rbm-contact-scrambler' ); ?></h2>
 		<form method="post" action="options.php">
 			<?php settings_fields( 'rbm_contact_scrambler_group' ); ?>
 			<table class="form-table" role="presentation">
 				<tr>
-					<th scope="row"><label for="rbm_contact_phone">Phone Number</label></th>
+					<th scope="row"><label for="rbm_contact_phone"><?php esc_html_e( 'Phone Number', 'rbm-contact-scrambler' ); ?></label></th>
 					<td>
 						<input type="text" id="rbm_contact_phone" name="<?php echo esc_attr( RBM_CONTACT_PHONE_OPTION ); ?>" value="<?php echo esc_attr( $phone ); ?>" class="regular-text">
-						<p class="description">Any format (e.g. 555-555-5555). Non-digit characters are stripped automatically for tel:/sms: links.</p>
+						<p class="description"><?php esc_html_e( 'Any format (e.g. 413-256-8899). Non-digit characters are stripped automatically for tel:/sms: links.', 'rbm-contact-scrambler' ); ?></p>
 					</td>
 				</tr>
 				<tr>
-					<th scope="row"><label for="rbm_contact_email">Email Address</label></th>
+					<th scope="row"><label for="rbm_contact_email"><?php esc_html_e( 'Email Address', 'rbm-contact-scrambler' ); ?></label></th>
 					<td>
 						<input type="email" id="rbm_contact_email" name="<?php echo esc_attr( RBM_CONTACT_EMAIL_OPTION ); ?>" value="<?php echo esc_attr( $email ); ?>" class="regular-text">
-						<p class="description">Used for <code>[rbm_email]</code>. Leave blank to have <code>[rbm_email]</code> output nothing.</p>
+						<p class="description">
+							<?php
+							printf(
+								/* translators: 1, 2: [rbm_email] shortcode tag */
+								esc_html__( 'Used for %1$s. Leave blank to have %2$s output nothing.', 'rbm-contact-scrambler' ),
+								'<code>[rbm_email]</code>',
+								'<code>[rbm_email]</code>'
+							);
+							?>
+						</p>
 					</td>
 				</tr>
 			</table>
-			<?php submit_button( 'Save Contact Settings' ); ?>
+			<?php submit_button( __( 'Save Contact Settings', 'rbm-contact-scrambler' ) ); ?>
 		</form>
 
-		<h2>Validation</h2>
+		<h2><?php esc_html_e( 'Validation', 'rbm-contact-scrambler' ); ?></h2>
 		<div id="rbm-escrambler-validation" class="notice notice-info inline rbm-escrambler-validation" aria-live="polite">
-			<div id="rbm-escrambler-validation-messages"><p>Click any Copy button to validate the settings used by that shortcode.</p></div>
+			<div id="rbm-escrambler-validation-messages"><p><?php esc_html_e( 'Click any Copy button to validate the settings used by that shortcode.', 'rbm-contact-scrambler' ); ?></p></div>
 		</div>
 
-		<h2>Shortcodes &amp; Preview</h2>
+		<h2><?php esc_html_e( 'Shortcodes & Preview', 'rbm-contact-scrambler' ); ?></h2>
 		<div class="rbm-escrambler-mode-notes">
-			<p><sup>1</sup> <code>mode="value"</code> = clickable value.</p>
-			<p><sup>2</sup> <code>mode="text"</code> = clickable custom label.</p>
-			<p><sup>3</sup> <code>mode="none"</code> = plain text only.</p>
-			<p><sup>4</sup> A blank <code>mode=""</code> defaults to <code>mode="value"</code>.</p>
-			<p><sup>5</sup> A shortcode without any <code>mode=</code> also defaults to <code>mode="value"</code>.</p>
+			<p><sup>1</sup> <?php
+			/* translators: %s: example mode attribute markup, e.g. "mode="value"". */
+			printf( esc_html__( '%s = clickable value.', 'rbm-contact-scrambler' ), '<code>mode="value"</code>' ); ?></p>
+			<p><sup>2</sup> <?php
+			/* translators: %s: example mode attribute markup, e.g. "mode="text"". */
+			printf( esc_html__( '%s = clickable custom label.', 'rbm-contact-scrambler' ), '<code>mode="text"</code>' ); ?></p>
+			<p><sup>3</sup> <?php
+			/* translators: %s: example mode attribute markup, e.g. "mode="none"". */
+			printf( esc_html__( '%s = plain text only.', 'rbm-contact-scrambler' ), '<code>mode="none"</code>' ); ?></p>
+			<p><sup>4</sup> <?php
+			/* translators: %1$s: blank mode attribute markup; %2$s: the default mode attribute markup. */
+			printf( esc_html__( 'A blank %1$s defaults to %2$s.', 'rbm-contact-scrambler' ), '<code>mode=""</code>', '<code>mode="value"</code>' ); ?></p>
+			<p><sup>5</sup> <?php
+			/* translators: %1$s: mode attribute name; %2$s: the default mode attribute markup. */
+			printf( esc_html__( 'A shortcode without any %1$s also defaults to %2$s.', 'rbm-contact-scrambler' ), '<code>mode=</code>', '<code>mode="value"</code>' ); ?></p>
 		</div>
-
-		<style>
-			.rbm-escrambler-validation { max-width: 760px; margin: 0 0 24px; padding: 4px 12px 12px; }
-			.rbm-escrambler-validation p { margin: 0.8em 0; }
-			.rbm-escrambler-validation-ok { font-weight: 600; }
-			.rbm-escrambler-validation-warning { font-weight: 600; }
-			.rbm-escrambler-field-error { border-color: #b32d2e !important; box-shadow: 0 0 0 1px #b32d2e !important; }
-			.rbm-escrambler-mode-notes { color: #50575e; font-size: 12px; max-width: 1100px; margin: 4px 0 14px; }
-			.rbm-escrambler-mode-notes p { margin: 2px 0; }
-			.rbm-escrambler-table { max-width: 1100px; border-collapse: collapse; margin-top: 4px; margin-bottom: 28px; background: #fff; }
-			.rbm-escrambler-table th, .rbm-escrambler-table td { border: 1px solid #dcdcde; padding: 10px 12px; vertical-align: top; text-align: left; }
-			.rbm-escrambler-table th { background: #f0f0f1; }
-			.rbm-escrambler-table code { font-size: 13px; white-space: nowrap; }
-			.rbm-escrambler-table .rbm-escrambler-preview a { font-weight: 600; }
-			.rbm-escrambler-custom-text { width: 160px; }
-			.rbm-escrambler-section-label td { background: #f0f0f1; font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
-		</style>
 
 		<?php
 		$sections = [
 			'phone' => [
-				'label'      => 'PHONE NUMBER SCRAMBLES',
+				'label'      => __( 'PHONE NUMBER SCRAMBLES', 'rbm-contact-scrambler' ),
 				'shortcode'  => 'rbm_phone',
-				'value_desc' => 'Clickable tel: phone number link.',
-				'text_desc'  => 'Clickable phone link with custom text.',
-				'none_desc'  => 'Phone number as plain text with no clickable link.',
-				'text_label' => 'Call Us',
+				'value_desc' => __( 'Clickable tel: phone number link.', 'rbm-contact-scrambler' ),
+				'text_desc'  => __( 'Clickable phone link with custom text.', 'rbm-contact-scrambler' ),
+				'none_desc'  => __( 'Phone number as plain text with no clickable link.', 'rbm-contact-scrambler' ),
+				'text_label' => __( 'Call Us', 'rbm-contact-scrambler' ),
 			],
 			'text'  => [
-				'label'      => 'TEXT MESSAGE SCRAMBLES',
+				'label'      => __( 'TEXT MESSAGE SCRAMBLES', 'rbm-contact-scrambler' ),
 				'shortcode'  => 'rbm_text',
-				'value_desc' => 'Clickable sms: text-message link.',
-				'text_desc'  => 'Clickable sms: text-message link with custom text.',
-				'none_desc'  => 'Phone number as plain text with no clickable link.',
-				'text_label' => 'Text Us',
+				'value_desc' => __( 'Clickable sms: text-message link.', 'rbm-contact-scrambler' ),
+				'text_desc'  => __( 'Clickable sms: text-message link with custom text.', 'rbm-contact-scrambler' ),
+				'none_desc'  => __( 'Phone number as plain text with no clickable link.', 'rbm-contact-scrambler' ),
+				'text_label' => __( 'Text Us', 'rbm-contact-scrambler' ),
 			],
 			'email' => [
-				'label'      => 'EMAIL SCRAMBLES',
+				'label'      => __( 'EMAIL SCRAMBLES', 'rbm-contact-scrambler' ),
 				'shortcode'  => 'rbm_email',
-				'value_desc' => 'Clickable mailto: email link.',
-				'text_desc'  => 'Clickable mailto: email link with custom text.',
-				'none_desc'  => 'Email as plain text with no clickable link.',
-				'text_label' => 'Email Us',
+				'value_desc' => __( 'Clickable mailto: email link.', 'rbm-contact-scrambler' ),
+				'text_desc'  => __( 'Clickable mailto: email link with custom text.', 'rbm-contact-scrambler' ),
+				'none_desc'  => __( 'Email as plain text with no clickable link.', 'rbm-contact-scrambler' ),
+				'text_label' => __( 'Email Us', 'rbm-contact-scrambler' ),
 			],
 		];
 		?>
@@ -328,30 +369,30 @@ function rbm_contact_scrambler_render_settings_page() {
 				<?php foreach ( $sections as $key => $section ) : ?>
 					<tr class="rbm-escrambler-section-label"><td colspan="5"><?php echo esc_html( $section['label'] ); ?></td></tr>
 					<tr>
-						<th>Shortcode</th>
-						<th>Custom text</th>
-						<th>Copy</th>
-						<th>Preview</th>
-						<th>What it does</th>
+						<th><?php esc_html_e( 'Shortcode', 'rbm-contact-scrambler' ); ?></th>
+						<th><?php esc_html_e( 'Custom text', 'rbm-contact-scrambler' ); ?></th>
+						<th><?php esc_html_e( 'Copy', 'rbm-contact-scrambler' ); ?></th>
+						<th><?php esc_html_e( 'Preview', 'rbm-contact-scrambler' ); ?></th>
+						<th><?php esc_html_e( 'What it does', 'rbm-contact-scrambler' ); ?></th>
 					</tr>
 					<tr>
 						<td><code>[<?php echo esc_html( $section['shortcode'] ); ?> mode="value"]</code></td>
 						<td></td>
-						<td><button type="button" class="button" data-rbm-escrambler-copy='[<?php echo esc_attr( $section['shortcode'] ); ?> mode="value"]'>Copy</button></td>
+						<td><button type="button" class="button" data-rbm-escrambler-copy='[<?php echo esc_attr( $section['shortcode'] ); ?> mode="value"]'><?php esc_html_e( 'Copy', 'rbm-contact-scrambler' ); ?></button></td>
 						<td class="rbm-escrambler-preview"><a href="#" id="rbm-escrambler-<?php echo esc_attr( $key ); ?>-value-preview"><?php echo esc_html( $key === 'email' ? $email : $phone ); ?></a></td>
 						<td><?php echo esc_html( $section['value_desc'] ); ?></td>
 					</tr>
 					<tr>
 						<td><code id="rbm-escrambler-<?php echo esc_attr( $key ); ?>-text-code">[<?php echo esc_html( $section['shortcode'] ); ?> mode="text" text="<?php echo esc_attr( $section['text_label'] ); ?>"]</code></td>
 						<td><input type="text" class="regular-text rbm-escrambler-custom-text" id="rbm-escrambler-<?php echo esc_attr( $key ); ?>-custom-text" value="<?php echo esc_attr( $section['text_label'] ); ?>"></td>
-						<td><button type="button" class="button" data-rbm-escrambler-dynamic-copy="<?php echo esc_attr( $key ); ?>">Copy</button></td>
+						<td><button type="button" class="button" data-rbm-escrambler-dynamic-copy="<?php echo esc_attr( $key ); ?>"><?php esc_html_e( 'Copy', 'rbm-contact-scrambler' ); ?></button></td>
 						<td class="rbm-escrambler-preview"><a href="#" id="rbm-escrambler-<?php echo esc_attr( $key ); ?>-text-preview"><?php echo esc_html( $section['text_label'] ); ?></a></td>
 						<td><?php echo esc_html( $section['text_desc'] ); ?></td>
 					</tr>
 					<tr>
 						<td><code>[<?php echo esc_html( $section['shortcode'] ); ?> mode="none"]</code></td>
 						<td></td>
-						<td><button type="button" class="button" data-rbm-escrambler-copy='[<?php echo esc_attr( $section['shortcode'] ); ?> mode="none"]'>Copy</button></td>
+						<td><button type="button" class="button" data-rbm-escrambler-copy='[<?php echo esc_attr( $section['shortcode'] ); ?> mode="none"]'><?php esc_html_e( 'Copy', 'rbm-contact-scrambler' ); ?></button></td>
 						<td id="rbm-escrambler-<?php echo esc_attr( $key ); ?>-none-preview"><?php echo esc_html( $key === 'email' ? $email : $phone ); ?></td>
 						<td><?php echo esc_html( $section['none_desc'] ); ?></td>
 					</tr>
@@ -361,184 +402,19 @@ function rbm_contact_scrambler_render_settings_page() {
 
 		<div id="rbm-escrambler-copy-status" aria-live="polite"></div>
 	</div>
-	<script>
-	( function () {
-		var phoneInput = document.getElementById( 'rbm_contact_phone' );
-		var emailInput = document.getElementById( 'rbm_contact_email' );
-		var types = [ 'phone', 'text', 'email' ];
-
-		function digitsOnly( value ) {
-			return String( value ).replace( /\D+/g, '' );
-		}
-
-		function isValidEmail( value ) {
-			return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test( value );
-		}
-
-		// blur = validate the field the user just left; never validates on every keystroke.
-		function validate() {
-			var phone = phoneInput.value.trim();
-			var email = emailInput.value.trim();
-			var digits = digitsOnly( phone );
-			var messages = [];
-			var hasError = false;
-
-			phoneInput.classList.remove( 'rbm-escrambler-field-error' );
-			emailInput.classList.remove( 'rbm-escrambler-field-error' );
-
-			if ( ! phone ) {
-				messages.push( '<p class="rbm-escrambler-validation-warning">Phone is blank. Phone and text shortcodes will output nothing.</p>' );
-			} else if ( digits.length < 7 || digits.length > 15 ) {
-				messages.push( '<p class="rbm-escrambler-validation-warning">Phone does not look valid. Use a number containing 7-15 digits.</p>' );
-				phoneInput.classList.add( 'rbm-escrambler-field-error' );
-				hasError = true;
-			}
-
-			if ( ! email ) {
-				messages.push( '<p class="rbm-escrambler-validation-warning">Email is blank. Email shortcodes will output nothing.</p>' );
-			} else if ( ! isValidEmail( email ) ) {
-				messages.push( '<p class="rbm-escrambler-validation-warning">Email address does not look valid.</p>' );
-				emailInput.classList.add( 'rbm-escrambler-field-error' );
-				hasError = true;
-			}
-
-			types.forEach( function ( type ) {
-				var input = document.getElementById( 'rbm-escrambler-' + type + '-custom-text' );
-				if ( input && input.value.trim() === '' ) {
-					messages.push( '<p class="rbm-escrambler-validation-warning">Custom text for ' + type + ' is blank. A mode="text" shortcode requires non-empty text="...".</p>' );
-					input.classList.add( 'rbm-escrambler-field-error' );
-					hasError = true;
-				} else if ( input ) {
-					input.classList.remove( 'rbm-escrambler-field-error' );
-				}
-			} );
-
-			if ( messages.length === 0 ) {
-				messages.push( '<p class="rbm-escrambler-validation-ok">No errors detected.</p>' );
-			}
-
-			document.getElementById( 'rbm-escrambler-validation-messages' ).innerHTML = messages.join( '' );
-
-			var box = document.getElementById( 'rbm-escrambler-validation' );
-			box.classList.remove( 'notice-info', 'notice-warning', 'notice-success' );
-			box.classList.add( hasError ? 'notice-warning' : ( messages.length && messages[0].indexOf( 'validation-ok' ) === -1 ? 'notice-warning' : 'notice-success' ) );
-
-			return ! hasError;
-		}
-
-		function updatePreview() {
-			var phone = phoneInput.value || '';
-			var email = emailInput.value || '';
-			var digits = digitsOnly( phone );
-
-			[ 'phone', 'text' ].forEach( function ( type ) {
-				var valuePreview = document.getElementById( 'rbm-escrambler-' + type + '-value-preview' );
-				var nonePreview  = document.getElementById( 'rbm-escrambler-' + type + '-none-preview' );
-				if ( valuePreview ) {
-					valuePreview.textContent = phone;
-					valuePreview.href = digits ? ( type === 'phone' ? 'tel:' : 'sms:' ) + digits : '#';
-				}
-				if ( nonePreview ) {
-					nonePreview.textContent = phone;
-				}
-				var textPreview = document.getElementById( 'rbm-escrambler-' + type + '-text-preview' );
-				if ( textPreview ) {
-					textPreview.href = digits ? ( type === 'phone' ? 'tel:' : 'sms:' ) + digits : '#';
-				}
-			} );
-
-			var emailValuePreview = document.getElementById( 'rbm-escrambler-email-value-preview' );
-			var emailNonePreview  = document.getElementById( 'rbm-escrambler-email-none-preview' );
-			var emailTextPreview  = document.getElementById( 'rbm-escrambler-email-text-preview' );
-			if ( emailValuePreview ) {
-				emailValuePreview.textContent = email;
-				emailValuePreview.href = email ? 'mailto:' + email : '#';
-			}
-			if ( emailNonePreview ) {
-				emailNonePreview.textContent = email;
-			}
-			if ( emailTextPreview ) {
-				emailTextPreview.href = email ? 'mailto:' + email : '#';
-			}
-		}
-
-		function updateCustomText( type ) {
-			var input = document.getElementById( 'rbm-escrambler-' + type + '-custom-text' );
-			var code = document.getElementById( 'rbm-escrambler-' + type + '-text-code' );
-			var preview = document.getElementById( 'rbm-escrambler-' + type + '-text-preview' );
-			var value = input.value || '';
-			var shortcode = type === 'phone' ? 'rbm_phone' : ( type === 'text' ? 'rbm_text' : 'rbm_email' );
-			code.textContent = '[' + shortcode + ' mode="text" text="' + value.replace( /"/g, '&quot;' ) + '"]';
-			preview.textContent = value;
-		}
-
-		types.forEach( function ( type ) {
-			var input = document.getElementById( 'rbm-escrambler-' + type + '-custom-text' );
-			if ( input ) {
-				input.addEventListener( 'input', function () {
-					updateCustomText( type );
-				} );
-				input.addEventListener( 'blur', validate );
-			}
-		} );
-
-		phoneInput.addEventListener( 'input', updatePreview );
-		emailInput.addEventListener( 'input', updatePreview );
-		phoneInput.addEventListener( 'blur', validate );
-		emailInput.addEventListener( 'blur', validate );
-
-		document.addEventListener( 'click', function ( event ) {
-			var button = event.target.closest( 'button' );
-			if ( ! button ) {
-				return;
-			}
-
-			var isCopyButton = button.hasAttribute( 'data-rbm-escrambler-copy' ) || button.hasAttribute( 'data-rbm-escrambler-dynamic-copy' );
-			if ( ! isCopyButton ) {
-				return;
-			}
-
-			if ( ! validate() ) {
-				document.getElementById( 'rbm-escrambler-copy-status' ).textContent = 'Please fix the highlighted field before copying.';
-				return;
-			}
-
-			var value = button.getAttribute( 'data-rbm-escrambler-copy' );
-			var dynamicType = button.getAttribute( 'data-rbm-escrambler-dynamic-copy' );
-			if ( dynamicType ) {
-				value = document.getElementById( 'rbm-escrambler-' + dynamicType + '-text-code' ).textContent;
-			}
-
-			if ( ! value ) {
-				return;
-			}
-
-			var status = document.getElementById( 'rbm-escrambler-copy-status' );
-
-			function done() {
-				status.textContent = 'Copied: ' + value;
-			}
-
-			if ( navigator.clipboard && navigator.clipboard.writeText ) {
-				navigator.clipboard.writeText( value ).then( done );
-			} else {
-				var temp = document.createElement( 'textarea' );
-				temp.value = value;
-				document.body.appendChild( temp );
-				temp.select();
-				document.execCommand( 'copy' );
-				document.body.removeChild( temp );
-				done();
-			}
-		} );
-
-		updatePreview();
-	} )();
-	</script>
 	<?php
 }
 
 // --- Shortcodes ---
+// All three render the same lightweight placeholder markup (no complete tel:/sms:/mailto: value
+// in the initial HTML); assets/js/rbm-contact-scrambler.js reverses the eScrambler Scramble Stack
+// and assembles the real href/text client-side.
+//
+// Mode contract:
+//   mode="value" - clickable configured value (default; also the fallback for omitted/blank mode)
+//   mode="text"  - clickable custom text supplied with text="..."
+//   mode="none"  - assembled value displayed as plain text, no link
+// Unknown, non-blank mode values render nothing (fail safely rather than expose raw contact data).
 
 add_shortcode( 'rbm_phone', 'rbm_contact_scrambler_phone_shortcode' );
 function rbm_contact_scrambler_phone_shortcode( $atts ) {
@@ -563,10 +439,10 @@ function rbm_contact_scrambler_render( $type, $atts, $shortcode_tag ) {
 
 	$mode = strtolower( trim( (string) $atts['mode'] ) );
 	if ( $mode === '' ) {
-		$mode = 'value';
+		$mode = 'value'; // Omitted or blank mode defaults to value at runtime.
 	}
 	if ( ! in_array( $mode, [ 'value', 'text', 'none' ], true ) ) {
-		return '';
+		return ''; // Unknown mode: no placeholder at all, nothing to expose.
 	}
 
 	$tag  = ( $mode === 'none' ) ? 'span' : 'a';
@@ -584,7 +460,7 @@ function rbm_contact_scrambler_render( $type, $atts, $shortcode_tag ) {
 	return $html;
 }
 
-// --- Frontend script + config ---
+// --- Frontend script + config (fails safely if both settings are empty) ---
 
 add_action( 'wp_enqueue_scripts', 'rbm_contact_scrambler_enqueue_script' );
 function rbm_contact_scrambler_enqueue_script() {
@@ -597,8 +473,13 @@ function rbm_contact_scrambler_enqueue_script() {
 		true
 	);
 
+	// eScrambler Scramble Stack: split -> rotate -> XOR -> encode -> shuffle -> rebuild. The
+	// complete phone number/email never appears in the localized config in plain form. Top-level
+	// keys 'a' (phone digits) and 'b' (email) are intentionally generic - not "phone"/"email" -
+	// so the localized JS config doesn't advertise which payload is which kind of contact data.
+	// See rbm_escrambler_build_payload() above for the per-payload key meanings (f/o/r/x/c).
 	wp_localize_script( 'rbm-contact-scrambler', 'rbmEscramblerData', [
-		'a' => rbm_bury_the_treasure( rbm_contact_scrambler_phone_digits() ),
-		'b' => rbm_bury_the_treasure( rbm_contact_scrambler_email() ),
+		'a' => rbm_escrambler_build_payload( rbm_contact_scrambler_phone_digits() ), // phone digits
+		'b' => rbm_escrambler_build_payload( rbm_contact_scrambler_email() ),       // email address
 	] );
 }

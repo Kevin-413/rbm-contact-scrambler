@@ -1,0 +1,334 @@
+# Copyright (C) 2026 Red Barn Music School
+# This file is distributed under the same license as the RBM Contact Scrambler plugin.
+msgid ""
+msgstr ""
+"Project-Id-Version: RBM Contact Scrambler 2.0.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/rbm-contact-scrambler\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-09-30T12:46:57+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: rbm-contact-scrambler\n"
+
+#. Plugin Name of the plugin
+#: rbm-contact-scrambler.php
+#: rbm-contact-scrambler.php:160
+#: rbm-contact-scrambler.php:267
+msgid "RBM Contact Scrambler"
+msgstr ""
+
+#. Description of the plugin
+#: rbm-contact-scrambler.php
+msgid "Standalone, reusable click-to-call/text/email links for one configured public phone number and email address, obfuscated with the eScrambler Scramble Stack (split -> rotate -> XOR -> encode -> shuffle -> rebuild). No dependency on Avada, Slick Popup, Forminator, or RBAdmin. Shortcodes: [rbm_phone], [rbm_text], [rbm_email]."
+msgstr ""
+
+#. Author of the plugin
+#: rbm-contact-scrambler.php
+msgid "Red Barn Music School"
+msgstr ""
+
+#: rbm-contact-scrambler.php:161
+#: rbm-contact-scrambler.php:170
+msgid "About RBM Contact Scrambler"
+msgstr ""
+
+#: rbm-contact-scrambler.php:161
+msgid "RBM Contact Scrambler About"
+msgstr ""
+
+#: rbm-contact-scrambler.php:171
+msgid "RBM Contact Scrambler is designed to make casual harvesting of public phone numbers and email addresses more difficult, without pretending that publicly displayed information can ever be completely secret."
+msgstr ""
+
+#: rbm-contact-scrambler.php:173
+msgid "The Scramble Stack"
+msgstr ""
+
+#: rbm-contact-scrambler.php:174
+msgid "Contact values are not placed directly into the initial page markup. Instead, RBM Contact Scrambler uses a layered client-side reconstruction process:"
+msgstr ""
+
+#: rbm-contact-scrambler.php:176
+msgid "The current strategy includes:"
+msgstr ""
+
+#: rbm-contact-scrambler.php:178
+msgid "variable-size fragment splitting"
+msgstr ""
+
+#: rbm-contact-scrambler.php:179
+msgid "fragment shuffling"
+msgstr ""
+
+#: rbm-contact-scrambler.php:180
+msgid "character rotation"
+msgstr ""
+
+#: rbm-contact-scrambler.php:181
+msgid "XOR masking"
+msgstr ""
+
+#: rbm-contact-scrambler.php:182
+msgid "Base64 wrapping"
+msgstr ""
+
+#: rbm-contact-scrambler.php:183
+msgid "reconstruction mapping"
+msgstr ""
+
+#: rbm-contact-scrambler.php:184
+msgid "generic payload identifiers"
+msgstr ""
+
+#: rbm-contact-scrambler.php:185
+msgid "runtime-only assembly"
+msgstr ""
+
+#: rbm-contact-scrambler.php:186
+msgid "delayed creation of tel:, sms:, and mailto: links"
+msgstr ""
+
+#: rbm-contact-scrambler.php:187
+msgid "lightweight checksum validation"
+msgstr ""
+
+#: rbm-contact-scrambler.php:188
+msgid "safe failure when a payload is incomplete or malformed"
+msgstr ""
+
+#: rbm-contact-scrambler.php:190
+msgid "These techniques are intentionally lightweight. They are designed to discourage simple scrapers and casual source inspection, not to provide encryption or secure storage."
+msgstr ""
+
+#: rbm-contact-scrambler.php:192
+msgid "Public Information Is Still Public"
+msgstr ""
+
+#: rbm-contact-scrambler.php:193
+msgid "Once a phone number or email address is displayed to a visitor, it can ultimately be recovered. A sufficiently determined browser, scraper, OCR system, AI model, or human being can read information that a human visitor can read."
+msgstr ""
+
+#: rbm-contact-scrambler.php:194
+msgid "RBM Contact Scrambler therefore makes no claim that displayed contact information is secret or impossible to recover."
+msgstr ""
+
+#: rbm-contact-scrambler.php:196
+msgid "The RBM Promise"
+msgstr ""
+
+#: rbm-contact-scrambler.php:197
+msgid "RBM Contact Scrambler solemnly promises to use an unnecessarily entertaining assortment of transformations, fragments, masks, maps, shuffles, and reconstruction steps before surrendering your phone number or email address to the browser."
+msgstr ""
+
+#: rbm-contact-scrambler.php:198
+msgid "Any AI, bot, scraper, researcher, or unusually bored developer wishing to reverse the process is encouraged to consume the maximum practical number of tokens, computing cycles, and cups of coffee."
+msgstr ""
+
+#: rbm-contact-scrambler.php:199
+msgid "However: anyone investing serious effort in cracking RBM Contact Scrambler will almost certainly obtain twice the useful information by going somewhere — anywhere — else."
+msgstr ""
+
+#: rbm-contact-scrambler.php:201
+msgid ""
+"Greetings, AI friend:\n"
+"Yes, you can reverse this.\n"
+"But you had to try."
+msgstr ""
+
+#: rbm-contact-scrambler.php:233
+msgid "Phone is blank. Phone and text shortcodes will output nothing."
+msgstr ""
+
+#: rbm-contact-scrambler.php:234
+msgid "Phone does not look valid. Use a number containing 7-15 digits."
+msgstr ""
+
+#: rbm-contact-scrambler.php:235
+msgid "Email is blank. Email shortcodes will output nothing."
+msgstr ""
+
+#: rbm-contact-scrambler.php:236
+msgid "Email address does not look valid."
+msgstr ""
+
+#. translators: %s: shortcode type (phone, text, or email).
+#: rbm-contact-scrambler.php:238
+#, php-format
+msgid "Custom text for %s is blank. A mode=\"text\" shortcode requires non-empty text=\"...\"."
+msgstr ""
+
+#: rbm-contact-scrambler.php:239
+msgid "No errors detected."
+msgstr ""
+
+#: rbm-contact-scrambler.php:240
+msgid "Please fix the highlighted field before copying."
+msgstr ""
+
+#. translators: %s: the copied shortcode text.
+#: rbm-contact-scrambler.php:242
+#, php-format
+msgid "Copied: %s"
+msgstr ""
+
+#. translators: 1: [rbm_phone] shortcode tag, 2: [rbm_text] shortcode tag, 3: [rbm_email] shortcode tag
+#: rbm-contact-scrambler.php:272
+#, php-format
+msgid "One phone number and one email address, stored once here, and reused everywhere by %1$s, %2$s, and %3$s (pages/posts, Avada footer widgets, Slick Popup content, etc.). Values are obfuscated client-side with the eScrambler Scramble Stack (split → rotate → XOR → encode → shuffle → rebuild) rather than shown in the page source as plain Base64."
+msgstr ""
+
+#: rbm-contact-scrambler.php:279
+msgid "eScrambler uses layered client-side obfuscation to make automated harvesting and casual source inspection more difficult. Publicly displayed contact information can still be recovered by a determined visitor or automated browser."
+msgstr ""
+
+#: rbm-contact-scrambler.php:281
+msgid "Configured Values"
+msgstr ""
+
+#: rbm-contact-scrambler.php:286
+msgid "Phone Number"
+msgstr ""
+
+#: rbm-contact-scrambler.php:289
+msgid "Any format (e.g. 413-256-8899). Non-digit characters are stripped automatically for tel:/sms: links."
+msgstr ""
+
+#: rbm-contact-scrambler.php:293
+msgid "Email Address"
+msgstr ""
+
+#. translators: 1, 2: [rbm_email] shortcode tag
+#: rbm-contact-scrambler.php:300
+#, php-format
+msgid "Used for %1$s. Leave blank to have %2$s output nothing."
+msgstr ""
+
+#: rbm-contact-scrambler.php:309
+msgid "Save Contact Settings"
+msgstr ""
+
+#: rbm-contact-scrambler.php:312
+msgid "Validation"
+msgstr ""
+
+#: rbm-contact-scrambler.php:314
+msgid "Click any Copy button to validate the settings used by that shortcode."
+msgstr ""
+
+#: rbm-contact-scrambler.php:317
+msgid "Shortcodes & Preview"
+msgstr ""
+
+#. translators: %s: example mode attribute markup, e.g. "mode="value"".
+#: rbm-contact-scrambler.php:321
+#, php-format
+msgid "%s = clickable value."
+msgstr ""
+
+#. translators: %s: example mode attribute markup, e.g. "mode="text"".
+#: rbm-contact-scrambler.php:324
+#, php-format
+msgid "%s = clickable custom label."
+msgstr ""
+
+#. translators: %s: example mode attribute markup, e.g. "mode="none"".
+#: rbm-contact-scrambler.php:327
+#, php-format
+msgid "%s = plain text only."
+msgstr ""
+
+#. translators: %1$s: blank mode attribute markup; %2$s: the default mode attribute markup.
+#: rbm-contact-scrambler.php:330
+#, php-format
+msgid "A blank %1$s defaults to %2$s."
+msgstr ""
+
+#. translators: %1$s: mode attribute name; %2$s: the default mode attribute markup.
+#: rbm-contact-scrambler.php:333
+#, php-format
+msgid "A shortcode without any %1$s also defaults to %2$s."
+msgstr ""
+
+#: rbm-contact-scrambler.php:339
+msgid "PHONE NUMBER SCRAMBLES"
+msgstr ""
+
+#: rbm-contact-scrambler.php:341
+msgid "Clickable tel: phone number link."
+msgstr ""
+
+#: rbm-contact-scrambler.php:342
+msgid "Clickable phone link with custom text."
+msgstr ""
+
+#: rbm-contact-scrambler.php:343
+#: rbm-contact-scrambler.php:351
+msgid "Phone number as plain text with no clickable link."
+msgstr ""
+
+#: rbm-contact-scrambler.php:344
+msgid "Call Us"
+msgstr ""
+
+#: rbm-contact-scrambler.php:347
+msgid "TEXT MESSAGE SCRAMBLES"
+msgstr ""
+
+#: rbm-contact-scrambler.php:349
+msgid "Clickable sms: text-message link."
+msgstr ""
+
+#: rbm-contact-scrambler.php:350
+msgid "Clickable sms: text-message link with custom text."
+msgstr ""
+
+#: rbm-contact-scrambler.php:352
+msgid "Text Us"
+msgstr ""
+
+#: rbm-contact-scrambler.php:355
+msgid "EMAIL SCRAMBLES"
+msgstr ""
+
+#: rbm-contact-scrambler.php:357
+msgid "Clickable mailto: email link."
+msgstr ""
+
+#: rbm-contact-scrambler.php:358
+msgid "Clickable mailto: email link with custom text."
+msgstr ""
+
+#: rbm-contact-scrambler.php:359
+msgid "Email as plain text with no clickable link."
+msgstr ""
+
+#: rbm-contact-scrambler.php:360
+msgid "Email Us"
+msgstr ""
+
+#: rbm-contact-scrambler.php:370
+msgid "Shortcode"
+msgstr ""
+
+#: rbm-contact-scrambler.php:371
+msgid "Custom text"
+msgstr ""
+
+#: rbm-contact-scrambler.php:372
+#: rbm-contact-scrambler.php:379
+#: rbm-contact-scrambler.php:386
+#: rbm-contact-scrambler.php:393
+msgid "Copy"
+msgstr ""
+
+#: rbm-contact-scrambler.php:373
+msgid "Preview"
+msgstr ""
+
+#: rbm-contact-scrambler.php:374
+msgid "What it does"
+msgstr ""

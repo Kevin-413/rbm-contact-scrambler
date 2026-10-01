@@ -1,0 +1,15 @@
+/* Settings > RBM Contact Scrambler admin page styling. */
+.rbm-escrambler-validation { max-width: 760px; margin: 0 0 24px; padding: 4px 12px 12px; }
+.rbm-escrambler-validation p { margin: 0.8em 0; }
+.rbm-escrambler-validation-ok { font-weight: 600; }
+.rbm-escrambler-validation-warning { font-weight: 600; }
+.rbm-escrambler-field-error { border-color: #b32d2e !important; box-shadow: 0 0 0 1px #b32d2e !important; }
+.rbm-escrambler-mode-notes { color: #50575e; font-size: 12px; max-width: 1100px; margin: 4px 0 14px; }
+.rbm-escrambler-mode-notes p { margin: 2px 0; }
+.rbm-escrambler-table { max-width: 1100px; border-collapse: collapse; margin-top: 4px; margin-bottom: 28px; background: #fff; }
+.rbm-escrambler-table th, .rbm-escrambler-table td { border: 1px solid #dcdcde; padding: 10px 12px; vertical-align: top; text-align: left; }
+.rbm-escrambler-table th { background: #f0f0f1; }
+.rbm-escrambler-table code { font-size: 13px; white-space: nowrap; }
+.rbm-escrambler-table .rbm-escrambler-preview a { font-weight: 600; }
+.rbm-escrambler-custom-text { width: 160px; }
+.rbm-escrambler-section-label td { background: #f0f0f1; font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
