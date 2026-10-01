@@ -2,7 +2,7 @@
 /**
  * Plugin Name: RBM Contact Scrambler
  * Description: Reusable phone, text, and email shortcodes with lightweight client-side obfuscation to discourage simple automated harvesting.
- * Version: 2.0.0
+ * Version: 2.1.0
  * Author: Red Barn Music School
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -21,9 +21,22 @@ define( 'RBM_CONTACT_SCRAMBLER_URL', plugin_dir_url( __FILE__ ) );
 define( 'RBM_CONTACT_PHONE_OPTION', 'rbm_contact_phone' );
 define( 'RBM_CONTACT_EMAIL_OPTION', 'rbm_contact_email' );
 
-add_action( 'plugins_loaded', 'rbm_contact_scrambler_load_textdomain' );
-function rbm_contact_scrambler_load_textdomain() {
-	load_plugin_textdomain( 'rbm-contact-scrambler', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+// Optional: giggsey/libphonenumber-for-php (Composer), used for real phone-number validation.
+// If vendor/autoload.php isn't present (dependency not installed), the plugin still works and
+// falls back to the lightweight character-set/digit-count check in
+// rbm_contact_scrambler_is_valid_phone().
+if ( file_exists( RBM_CONTACT_SCRAMBLER_DIR . '/vendor/autoload.php' ) ) {
+	require_once RBM_CONTACT_SCRAMBLER_DIR . '/vendor/autoload.php';
+}
+
+/**
+ * Default region (ISO 3166-1 alpha-2) assumed for phone numbers that don't start with an explicit
+ * "+<country code>" prefix. Numbers with an explicit international prefix (e.g. "+44 20 7946
+ * 0958") are still parsed using that prefix's country regardless of this default. Filterable for
+ * multisite/multi-region use without a settings-page dropdown.
+ */
+function rbm_contact_scrambler_default_region() {
+	return apply_filters( 'rbm_contact_scrambler_default_region', 'US' );
 }
 
 function rbm_contact_scrambler_phone_digits() {
@@ -191,6 +204,9 @@ function rbm_contact_scrambler_render_about_page() {
 		</ul>
 		<p><?php esc_html_e( 'These techniques are intentionally lightweight. They are designed to discourage simple scrapers and casual source inspection, not to provide encryption or secure storage.', 'rbm-contact-scrambler' ); ?></p>
 
+		<h2><?php esc_html_e( 'Works Alongside Your Security Plugins', 'rbm-contact-scrambler' ); ?></h2>
+		<p><?php esc_html_e( 'RBM Contact Scrambler is designed to work alongside your existing WordPress security, CAPTCHA, and anti-spam plugins. No additional security plugin is required for its standard operation.', 'rbm-contact-scrambler' ); ?></p>
+
 		<h2><?php esc_html_e( 'Public Information Is Still Public', 'rbm-contact-scrambler' ); ?></h2>
 		<p><?php esc_html_e( 'Once a phone number or email address is displayed to a visitor, it can ultimately be recovered. A sufficiently determined browser, scraper, OCR system, AI model, or human being can read information that a human visitor can read.', 'rbm-contact-scrambler' ); ?></p>
 		<p><?php esc_html_e( 'RBM Contact Scrambler therefore makes no claim that displayed contact information is secret or impossible to recover.', 'rbm-contact-scrambler' ); ?></p>
@@ -249,13 +265,134 @@ function rbm_contact_scrambler_enqueue_admin_assets( $hook_suffix ) {
 add_action( 'admin_init', 'rbm_contact_scrambler_register_settings' );
 function rbm_contact_scrambler_register_settings() {
 	register_setting( 'rbm_contact_scrambler_group', RBM_CONTACT_PHONE_OPTION, [
-		'sanitize_callback' => 'sanitize_text_field',
+		'sanitize_callback' => 'rbm_contact_scrambler_sanitize_phone',
 		'default'           => '',
 	] );
 	register_setting( 'rbm_contact_scrambler_group', RBM_CONTACT_EMAIL_OPTION, [
-		'sanitize_callback' => 'sanitize_email',
+		'sanitize_callback' => 'rbm_contact_scrambler_sanitize_email',
 		'default'           => '',
-	] );}
+	] );
+}
+
+/**
+ * True if the giggsey/libphonenumber-for-php Composer dependency is installed and autoloaded.
+ * When false, phone validation falls back to the lightweight character-set/digit-count check.
+ */
+function rbm_contact_scrambler_has_libphonenumber() {
+	return class_exists( '\libphonenumber\PhoneNumberUtil' );
+}
+
+/**
+ * Real phone-number validation via giggsey/libphonenumber-for-php (Google's libphonenumber
+ * ported to PHP), when that Composer dependency is installed. $value is parsed against the
+ * default region from rbm_contact_scrambler_default_region() (United States unless filtered),
+ * but a value starting with an explicit "+<country code>" (e.g. "+44 20 7946 0958") is parsed
+ * using that country instead, regardless of the default region. Returns true only if the parsed
+ * number is a real, assignable phone number for its region (correct length/prefix/format for that
+ * country) - this rejects nonsense like "(((1234567" that the character-set fallback would allow.
+ */
+function rbm_contact_scrambler_is_valid_phone_strict( $value ) {
+	$util = \libphonenumber\PhoneNumberUtil::getInstance();
+	try {
+		$number = $util->parse( $value, rbm_contact_scrambler_default_region() );
+	} catch ( \libphonenumber\NumberParseException $e ) {
+		return false;
+	}
+	return $util->isValidNumber( $number );
+}
+
+/**
+ * Lightweight phone format check - NOT full phone-number verification. It only confirms that
+ * $value contains solely digits, the usual separators (spaces, dashes, dots, parentheses), and
+ * an optional leading "+", and that it has 7-15 digits total (matching the admin JS's
+ * live-validation rule and typical national/international lengths). It does not check digit
+ * grouping, area code plausibility, or reject odd-but-allowed punctuation (e.g. "(((1234567"
+ * passes because it's all allowed characters with 7 digits); this is intentional - the goal is to
+ * block obviously malformed input (letters, missing/too few/too many digits), not to enforce a
+ * strict phone-number grammar.
+ *
+ * Used as a fallback only when giggsey/libphonenumber-for-php (see
+ * rbm_contact_scrambler_is_valid_phone_strict()) is not installed; see
+ * rbm_contact_scrambler_is_valid_phone() below for which check actually runs.
+ */
+function rbm_contact_scrambler_is_valid_phone_loose( $value ) {
+	if ( ! preg_match( '/^\+?[0-9()\-.\s]{7,20}$/', $value ) ) {
+		return false;
+	}
+	$digits = preg_replace( '/\D+/', '', $value );
+	return strlen( $digits ) >= 7 && strlen( $digits ) <= 15;
+}
+
+/**
+ * Validate $value as a phone number, preferring real phone-number verification
+ * (giggsey/libphonenumber-for-php) when that Composer dependency is installed, and otherwise
+ * falling back to a lightweight character-set/digit-count check. See
+ * rbm_contact_scrambler_is_valid_phone_strict() and rbm_contact_scrambler_is_valid_phone_loose().
+ */
+function rbm_contact_scrambler_is_valid_phone( $value ) {
+	if ( rbm_contact_scrambler_has_libphonenumber() ) {
+		return rbm_contact_scrambler_is_valid_phone_strict( $value );
+	}
+	return rbm_contact_scrambler_is_valid_phone_loose( $value );
+}
+
+/**
+ * Sanitize/validate the phone setting on save (see rbm_contact_scrambler_is_valid_phone() for
+ * which check runs - real phone-number validation when giggsey/libphonenumber-for-php is
+ * installed, otherwise a lightweight character-set/digit-count check). Blank is allowed
+ * (shortcodes degrade gracefully for an empty value). Input that fails the check is rejected: a
+ * settings error is shown and the previously saved value is kept so a malformed submission can't
+ * clobber a working setting.
+ */
+function rbm_contact_scrambler_sanitize_phone( $input ) {
+	$previous = get_option( RBM_CONTACT_PHONE_OPTION, '' );
+	$value    = trim( sanitize_text_field( (string) $input ) );
+
+	if ( $value === '' ) {
+		return '';
+	}
+
+	if ( ! rbm_contact_scrambler_is_valid_phone( $value ) ) {
+		$message = rbm_contact_scrambler_has_libphonenumber()
+			? __( 'Phone number was not saved: it does not look like a valid phone number. Enter a US number (e.g. 413-256-8899) or an international number with its country code (e.g. +44 20 7946 0958). Your previously saved phone number has been kept.', 'rbm-contact-scrambler' )
+			: __( 'Phone number was not saved: use only digits, spaces, and ()-.+ separators, with 7-15 digits total (e.g. 413-256-8899 or +1 413-256-8899). Your previously saved phone number has been kept.', 'rbm-contact-scrambler' );
+		add_settings_error(
+			RBM_CONTACT_PHONE_OPTION,
+			'rbm_contact_phone_invalid',
+			$message,
+			'error'
+		);
+		return $previous;
+	}
+
+	return $value;
+}
+
+/**
+ * Sanitize/validate the email setting on save using WordPress's is_email(). Blank is allowed.
+ * Invalid, non-blank input is rejected: a settings error is shown and the previously saved value
+ * is kept so a malformed submission can't clobber a working setting.
+ */
+function rbm_contact_scrambler_sanitize_email( $input ) {
+	$previous = get_option( RBM_CONTACT_EMAIL_OPTION, '' );
+	$value    = trim( sanitize_text_field( (string) $input ) );
+
+	if ( $value === '' ) {
+		return '';
+	}
+
+	if ( ! is_email( $value ) ) {
+		add_settings_error(
+			RBM_CONTACT_EMAIL_OPTION,
+			'rbm_contact_email_invalid',
+			__( 'Email address was not saved because it is not a valid email address. Your previously saved email address has been kept.', 'rbm-contact-scrambler' ),
+			'error'
+		);
+		return $previous;
+	}
+
+	return sanitize_email( $value );
+}
 
 function rbm_contact_scrambler_render_settings_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
@@ -267,6 +404,13 @@ function rbm_contact_scrambler_render_settings_page() {
 	?>
 	<div class="wrap">
 		<h1><?php esc_html_e( 'RBM Contact Scrambler', 'rbm-contact-scrambler' ); ?></h1>
+		<?php
+		// Settings errors are already rendered automatically by WordPress core: admin-header.php
+		// includes wp-admin/options-head.php (which calls settings_errors()) for any admin page
+		// whose parent is options-general.php - which includes this page, since it's registered
+		// via add_options_page(). An explicit settings_errors() call here would duplicate the
+		// same notice.
+		?>
 		<p>
 			<?php
 			printf(
@@ -288,7 +432,15 @@ function rbm_contact_scrambler_render_settings_page() {
 					<th scope="row"><label for="rbm_contact_phone"><?php esc_html_e( 'Phone Number', 'rbm-contact-scrambler' ); ?></label></th>
 					<td>
 						<input type="text" id="rbm_contact_phone" name="<?php echo esc_attr( RBM_CONTACT_PHONE_OPTION ); ?>" value="<?php echo esc_attr( $phone ); ?>" class="regular-text">
-						<p class="description"><?php esc_html_e( 'Any format (e.g. 413-256-8899). Non-digit characters are stripped automatically for tel:/sms: links.', 'rbm-contact-scrambler' ); ?></p>
+						<p class="description">
+							<?php
+							if ( rbm_contact_scrambler_has_libphonenumber() ) {
+								esc_html_e( 'US format assumed by default (e.g. 413-256-8899). For other countries, include the international prefix (e.g. +44 20 7946 0958). Non-digit characters are stripped automatically for tel:/sms: links.', 'rbm-contact-scrambler' );
+							} else {
+								esc_html_e( 'Any format (e.g. 413-256-8899). Non-digit characters are stripped automatically for tel:/sms: links.', 'rbm-contact-scrambler' );
+							}
+							?>
+						</p>
 					</td>
 				</tr>
 				<tr>

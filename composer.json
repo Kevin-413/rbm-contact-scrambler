@@ -1,0 +1,8 @@
+{
+    "name": "redbarn/rbm-contact-scrambler",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "giggsey/libphonenumber-for-php": "^9.0"
+    }
+}
